@@ -1,4 +1,4 @@
-# Bakoron (ব্যকরণ)
+# Bakoron (ব্যাকরণ)
 
 ⚠️ Work in progress
 
