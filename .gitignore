@@ -1,5 +1,6 @@
 obj/
 out/
+compile_commands.json
 
 # Emacs backup and auto-save files
 *~
