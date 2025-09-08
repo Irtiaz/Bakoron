@@ -36,6 +36,8 @@ int main(void) {
 
   const char *input = "1+0";
 
+  bakoron_init(&bakoron);
+
   bakoron_register_symbol(&bakoron, EXPRESSION, BK_VARIABLE);
   bakoron_register_symbol(&bakoron, PLUS, BK_TERMINAL);
   bakoron_register_symbol(&bakoron, BIT, BK_TERMINAL);
