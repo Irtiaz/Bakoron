@@ -12,8 +12,11 @@ all: $(TARGET)
 $(TARGET): $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(wildcard $(SRC)/*.c)) | $(OUT)
 	$(CC) $^ $(ASAN_FLAGS) -o $@
 
-$(OBJ)/main.o: $(SRC)/main.c | $(OBJ)
+$(OBJ)/main.o: $(SRC)/main.c $(INCLUDE)/bakoron.h | $(OBJ)
 	$(CC) -c $(SRC)/main.c $(CFLAGS) -o $@
+
+$(OBJ)/bakoron.o: $(SRC)/bakoron.c $(INCLUDE)/bakoron.h | $(OBJ)
+	$(CC) -c $(SRC)/bakoron.c $(CFLAGS) -o $@
 
 $(OBJ):
 	mkdir -p $(OBJ)
