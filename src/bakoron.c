@@ -1,12 +1,17 @@
 #include "bakoron.h"
+#include "stb_ds.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "stb_ds.h"
+
+typedef struct {
+  int *children;
+  int rule_descriptor;
+} Bakoron_Rule;
 
 struct Bakoron_Symbol {
   int symbol;
   Bakoron_Symbol_Type type;
-  int **rules;
+  Bakoron_Rule **rules;
 };
 
 void bakoron_init(Bakoron *bakoron) {
@@ -27,14 +32,19 @@ void bakoron_register_symbol(Bakoron *bakoron, int symbol,
   hmput(bakoron->symbol_to_index_map, symbol, arrlen(bakoron->symbols) - 1);
 }
 
-void bakoron_register_rule(Bakoron *bakoron, int symbol, int *rule,
-                           size_t rule_length) {
-  int *rule_copy = NULL;
+void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor,
+                           int *rule, size_t rule_length) {
+  Bakoron_Rule *bk_rule;
   size_t i;
   int symbol_index;
 
+  bk_rule = (Bakoron_Rule *)malloc(sizeof(Bakoron_Rule));
+
+  bk_rule->rule_descriptor = rule_descriptor;
+  bk_rule->children = NULL;
+
   for (i = 0; i < rule_length; ++i) {
-    arrput(rule_copy, rule[i]);
+    arrput(bk_rule->children, rule[i]);
   }
 
   symbol_index = hmget(bakoron->symbol_to_index_map, symbol);
@@ -46,13 +56,12 @@ void bakoron_register_rule(Bakoron *bakoron, int symbol, int *rule,
       exit(1);
     }
 
-    arrput(bakoron->symbols[symbol_index].rules, rule_copy);
-
+    arrput(bakoron->symbols[symbol_index].rules, bk_rule);
   }
 
   else {
     bakoron_register_symbol(bakoron, symbol, BK_VARIABLE);
-    arrput(arrlast(bakoron->symbols).rules, rule_copy);
+    arrput(arrlast(bakoron->symbols).rules, bk_rule);
   }
 }
 
@@ -79,18 +88,22 @@ void bakoron_cleanup(Bakoron *bakoron) {
   for (i = 0; i < arrlen(bakoron->symbols); ++i) {
     int j;
     for (j = 0; j < arrlen(bakoron->symbols[i].rules); ++j) {
-      arrfree(bakoron->symbols[i].rules[j]);
+      arrfree(bakoron->symbols[i].rules[j]->children);
+      free(bakoron->symbols[i].rules[j]);
     }
     arrfree(bakoron->symbols[i].rules);
   }
-  arrfree(bakoron->symbols);
 
+  arrfree(bakoron->symbols);
   hmfree(bakoron->symbol_to_index_map);
 }
 
 void bakoron_cleanup_tree(Bakoron_Tree *tree) {
-  (void)tree;
+  int i;
 
-  fprintf(stderr, "ERROR: Cleanup tree not implemented yet\n");
-  exit(1);
+  free(tree->lexeme);
+
+  for (i = 0; i < arrlen(tree->children); ++i) {
+    bakoron_cleanup_tree(tree->children[i]);
+  }
 }

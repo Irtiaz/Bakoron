@@ -11,7 +11,12 @@ typedef struct {
 typedef struct Bakoron_Tree_Struct Bakoron_Tree;
 
 struct Bakoron_Tree_Struct {
+  int symbol;
+  char *lexeme;
+  int rule_descriptor;
+  
   Bakoron_Tree **children;
+  int number_of_children;
 };
 
 typedef enum { BK_VARIABLE, BK_TERMINAL } Bakoron_Symbol_Type;
@@ -23,7 +28,7 @@ void bakoron_register_symbol(Bakoron *bakoron, int symbol,
                              Bakoron_Symbol_Type type);
 
 
-void bakoron_register_rule(Bakoron *bakoron, int symbol, int *rule,
+void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor, int *rule,
                            size_t rule_length);
 
 Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,

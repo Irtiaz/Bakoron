@@ -1,8 +1,9 @@
+#include "bakoron.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "bakoron.h"
 
 typedef enum { EXPRESSION, BIT, PLUS } Symbol;
+typedef enum { EXPRESSION__BIT_PLUS_BIT } Rule;
 
 size_t get_next_token(const char *string, int *token, void *user_data) {
   (void)user_data;
@@ -28,7 +29,27 @@ size_t get_next_token(const char *string, int *token, void *user_data) {
   }
 }
 
+int evaluate_tree(Bakoron_Tree *tree) {
+  if (tree->symbol == EXPRESSION) {
+    if (tree->rule_descriptor == EXPRESSION__BIT_PLUS_BIT) {
 
+      return evaluate_tree(tree->children[0]) +
+             evaluate_tree(tree->children[2]);
+    }
+
+    else {
+      fprintf(stderr, "ERROR: Undefined rule found for EXPRRESSION\n");
+      exit(1);
+    }
+  }
+
+  else if (tree->symbol == BIT) {
+    return tree->lexeme[0] - '0';
+  }
+
+  fprintf(stderr, "ERROR: Neither EXPRESSION nor BIT encountered\n");
+  exit(1);
+}
 
 int main(void) {
   Bakoron bakoron;
@@ -44,12 +65,14 @@ int main(void) {
 
   {
     int rule[] = {BIT, PLUS, BIT};
-    bakoron_register_rule(&bakoron, EXPRESSION, rule,
+    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__BIT_PLUS_BIT, rule,
                           sizeof(rule) / sizeof(rule[0]));
   }
 
   tree =
       bakoron_parse_string(&bakoron, EXPRESSION, get_next_token, input, NULL);
+
+  printf("Result: %d\n", evaluate_tree(tree));
 
   bakoron_cleanup(&bakoron);
   bakoron_cleanup_tree(tree);
