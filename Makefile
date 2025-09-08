@@ -13,10 +13,13 @@ $(TARGET): $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(wildcard $(SRC)/*.c)) | $(OUT)
 	$(CC) $^ $(ASAN_FLAGS) -o $@
 
 $(OBJ)/main.o: $(SRC)/main.c $(INCLUDE)/bakoron.h | $(OBJ)
-	$(CC) -c $(SRC)/main.c $(CFLAGS) -o $@
+	$(CC) -c $< $(CFLAGS) -o $@
 
 $(OBJ)/bakoron.o: $(SRC)/bakoron.c $(INCLUDE)/bakoron.h | $(OBJ)
-	$(CC) -c $(SRC)/bakoron.c $(CFLAGS) -o $@
+	$(CC) -c $< $(CFLAGS) -o $@
+
+$(OBJ)/stb_ds.o: $(SRC)/stb_ds.c $(INCLUDE)/stb_ds.h | $(OBJ)
+	$(CC) -Iinclude -c $< -o $@
 
 $(OBJ):
 	mkdir -p $(OBJ)

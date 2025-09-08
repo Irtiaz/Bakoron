@@ -1,6 +1,6 @@
 #include "bakoron.h"
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void bakoron_register_symbol(Bakoron *bakoron, int symbol,
                              Bakoron_Symbol_Type type) {
