@@ -32,8 +32,8 @@ void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor, in
                            size_t rule_length);
 
 Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
-                                   size_t (*get_next_token)(const char *string,
-                                                            int *token,
+                                   int (*get_next_token)(const char *string,
+                                                            size_t *token,
                                                             void *user_data),
                                    const char *string, void *user_data);
 
