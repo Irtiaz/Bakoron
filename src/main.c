@@ -30,7 +30,6 @@ int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
     return DIGIT;
   }
 
-
   else if (is_whitespace(string[0])) {
     size_t whitespace_size = 0;
     while (is_whitespace(string[0])) {
@@ -53,13 +52,15 @@ int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
 int evaluate_tree(Bakoron_Tree *tree) {
   if (tree->symbol == EXPRESSION) {
     if (tree->rule_descriptor == EXPRESSION__DIGIT_PLUS_DIGIT) {
+      int left_operand = evaluate_tree(tree->children[0]);
+      int right_operand = evaluate_tree(tree->children[2]);
 
-      return evaluate_tree(tree->children[0]) +
-             evaluate_tree(tree->children[2]);
+      return left_operand + right_operand;
     }
 
     else {
-      fprintf(stderr, "ERROR: Undefined rule found for EXPRRESSION\n");
+      fprintf(stderr, "%s:%d: ERROR: Undefined rule found for EXPRRESSION\n",
+              __FILE__, __LINE__);
       exit(1);
     }
   }
@@ -68,8 +69,9 @@ int evaluate_tree(Bakoron_Tree *tree) {
     return tree->lexeme[0] - '0';
   }
 
-
-  fprintf(stderr, "%s:%d: ERROR: Neither EXPRESSION nor DIGIT encountered -> %d %s\n", __FILE__, __LINE__, tree->symbol, tree->lexeme);
+  fprintf(stderr,
+          "%s:%d: ERROR: Neither EXPRESSION nor DIGIT encountered -> %d %s\n",
+          __FILE__, __LINE__, tree->symbol, tree->lexeme);
   exit(1);
 }
 
@@ -87,8 +89,8 @@ int main(void) {
 
   {
     int rule[] = {DIGIT, PLUS, DIGIT};
-    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_PLUS_DIGIT, rule,
-                          sizeof(rule) / sizeof(rule[0]));
+    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_PLUS_DIGIT,
+                          rule, sizeof(rule) / sizeof(rule[0]));
   }
 
   tree =

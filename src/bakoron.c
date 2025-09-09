@@ -34,6 +34,10 @@ void bakoron_register_symbol(Bakoron *bakoron, int symbol,
   hmput(bakoron->symbol_to_index_map, symbol, arrlen(bakoron->symbols) - 1);
 }
 
+static int _symbol_is_registered(Bakoron *bakoron, int symbol) {
+  return hmget(bakoron->symbol_to_index_map, symbol) >= 0;
+}
+
 void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor,
                            int *rule, size_t rule_length) {
   Bakoron_Rule *bk_rule;
@@ -94,54 +98,105 @@ static char *_strndup(const char *string, size_t n) {
   return copy;
 }
 
+static int _get_next_registered_token(
+    Bakoron *bakoron,
+    int (*get_next_token)(const char *string, size_t *cosumed_size,
+                          void *user_data),
+    size_t *consumed_size, size_t *skip_size, void *user_data,
+    const char *string) {
+
+  int string_length = strlen(string);
+
+  if (consumed_size != NULL)
+    *consumed_size = 0;
+
+  if (skip_size != NULL)
+    *skip_size = 0;
+
+  while (string_length > 0) {
+    size_t parsed_length;
+    int next_token = get_next_token(string, &parsed_length, user_data);
+
+    if (consumed_size != NULL)
+      *consumed_size += parsed_length;
+
+    if (_symbol_is_registered(bakoron, next_token)) {
+      return next_token;
+    }
+
+    string += parsed_length;
+    string_length -= parsed_length;
+
+    if (skip_size != NULL)
+      *skip_size += parsed_length;
+  }
+
+  return -1;
+}
+
 static Bakoron_Tree *_parse_string_recursive(
+    Bakoron *bakoron, Bakoron_Symbol *start_symbol,
+    int (*get_next_token)(const char *string, size_t *consumed_size,
+                          void *user_data),
+    const char *string, void *user_data, size_t *parsed_length);
+
+
+static Bakoron_Tree *_parse_string_with_terminal(
+    Bakoron *bakoron, Bakoron_Symbol *start_symbol,
+    int (*get_next_token)(const char *string, size_t *consumed_size,
+                          void *user_data),
+    const char *string, void *user_data, size_t *parsed_length) {
+
+  size_t skip_size;
+  int next_token;
+
+  char *lexeme;
+  Bakoron_Tree *tree;
+
+  if (start_symbol->type != BK_TERMINAL) {
+    fprintf(stderr, "%s:%d: ERROR: cannot parse a non variable symbol with variable parsing\n", __FILE__, __LINE__);
+    exit(1);
+  }
+
+  next_token = _get_next_registered_token(
+      bakoron, get_next_token, parsed_length, &skip_size, user_data, string);
+
+  if (start_symbol->symbol != next_token) {
+    if (next_token < 0) {
+      fprintf(stderr, "%s:%d: Syntax error: Expected %d, found end of input\n",
+              __FILE__, __LINE__, start_symbol->symbol);
+      return NULL;
+    }
+
+    fprintf(stderr, "%s:%d: Syntax error: Expected %d, found %d\n", __FILE__,
+            __LINE__, start_symbol->symbol, next_token);
+    return NULL;
+  }
+
+  lexeme = _strndup(string + skip_size, *parsed_length);
+
+  tree = (Bakoron_Tree *)malloc(sizeof(Bakoron_Tree));
+  _tree_init(tree, next_token, lexeme, -1);
+
+  return tree;
+}
+
+
+static Bakoron_Tree *_parse_string_with_variable(
     Bakoron *bakoron, Bakoron_Symbol *start_symbol,
     int (*get_next_token)(const char *string, size_t *consumed_size,
                           void *user_data),
     const char *string, void *user_data, size_t *parsed_length) {
 
   int i;
-  int string_length = strlen(string);
+  int string_length;
 
-  if (parsed_length != NULL)
-    *parsed_length = 0;
-
-  if (start_symbol->type == BK_TERMINAL) {
-
-    while (1) {
-      size_t consumed_size;
-      int next_token = get_next_token(string, &consumed_size, user_data);
-      if (parsed_length != NULL)
-        *parsed_length += consumed_size;
-
-      if (hmget(bakoron->symbol_to_index_map, next_token) >= 0) {
-        char *lexeme;
-        Bakoron_Tree *tree;
-
-        if (start_symbol->symbol != next_token) {
-          fprintf(stderr, "%s:%d: Syntax error: Expected %d, found %d\n",
-                  __FILE__, __LINE__, start_symbol->symbol, next_token);
-          return NULL;
-        }
-
-        lexeme = _strndup(string, consumed_size);
-        tree = (Bakoron_Tree *)malloc(sizeof(Bakoron_Tree));
-        _tree_init(tree, next_token, lexeme, -1);
-
-        return tree;
-      }
-
-      string += consumed_size;
-      string_length -= consumed_size;
-
-      if (string_length <= 0)
-        break;
-    }
-
-    fprintf(stderr, "ERROR: %s:%d: Should be unreachable code here\n", __FILE__,
-            __LINE__);
+  if (start_symbol->type != BK_VARIABLE) {
+    fprintf(stderr, "%s:%d: ERROR: cannot parse a non variable symbol with variable parsing\n", __FILE__, __LINE__);
     exit(1);
   }
+
+  string_length = strlen(string);
 
   for (i = 0; i < arrlen(start_symbol->rules); ++i) {
     Bakoron_Rule *rule = start_symbol->rules[i];
@@ -171,7 +226,7 @@ static Bakoron_Tree *_parse_string_recursive(
         /* TODO or remaining_string_length == 0 but there are other non nullable
          * siblings after me */
 
-	rule_succeded = 0;
+        rule_succeded = 0;
         break;
       }
 
@@ -191,6 +246,26 @@ static Bakoron_Tree *_parse_string_recursive(
   return NULL;
 }
 
+static Bakoron_Tree *_parse_string_recursive(
+    Bakoron *bakoron, Bakoron_Symbol *start_symbol,
+    int (*get_next_token)(const char *string, size_t *consumed_size,
+                          void *user_data),
+    const char *string, void *user_data, size_t *parsed_length) {
+
+  if (parsed_length != NULL)
+    *parsed_length = 0;
+
+  if (start_symbol->type == BK_TERMINAL) {
+    return _parse_string_with_terminal(bakoron, start_symbol, get_next_token,
+                                       string, user_data, parsed_length);
+  }
+
+  else {
+    return _parse_string_with_variable(bakoron, start_symbol, get_next_token,
+                                       string, user_data, parsed_length);
+  }
+}
+
 Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
                                    int (*get_next_token)(const char *string,
                                                          size_t *consumed_size,
@@ -205,7 +280,7 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
   int remaining_token;
   size_t parsed_length;
 
-  if (start_symbol_index < 0) {
+  if (!_symbol_is_registered(bakoron, start_symbol)) {
     fprintf(stderr, "ERROR: Start symbol %d is not registered\n", start_symbol);
     exit(1);
   }
@@ -215,16 +290,24 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
   tree = _parse_string_recursive(bakoron, bk_start_symbol, get_next_token,
                                  string, user_data, &parsed_length);
 
-  if (string[parsed_length] != '\0') {
-    remaining_token =
-        get_next_token(string + parsed_length, &parsed_length, user_data);
+  if (tree) {
+    remaining_token = _get_next_registered_token(
+        bakoron, get_next_token, NULL, NULL, user_data, string + parsed_length);
 
-    if (hmget(bakoron->symbol_to_index_map, remaining_token) >= 0) {
-      bakoron_cleanup_tree(tree);
+    if (remaining_token >= 0) {
       fprintf(stderr,
               "%s:%d: Syntax error: unexpected token %d at end of input\n",
               __FILE__, __LINE__, remaining_token);
+      bakoron_cleanup_tree(tree);
       return NULL;
+    }
+
+    if (string[parsed_length] != '\0') {
+      remaining_token =
+          get_next_token(string + parsed_length, &parsed_length, user_data);
+
+      if (_symbol_is_registered(bakoron, remaining_token)) {
+      }
     }
   }
 
@@ -250,7 +333,8 @@ void bakoron_cleanup(Bakoron *bakoron) {
 void bakoron_cleanup_tree(Bakoron_Tree *tree) {
   int i;
 
-  if (tree->lexeme) free(tree->lexeme);
+  if (tree->lexeme)
+    free(tree->lexeme);
 
   for (i = 0; i < arrlen(tree->children); ++i) {
     bakoron_cleanup_tree(tree->children[i]);
