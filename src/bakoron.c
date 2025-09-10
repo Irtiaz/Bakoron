@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define BK_EPSILON -1
-
 typedef struct {
   int *children;
   int rule_descriptor;
@@ -383,14 +381,6 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
 
   /* TODO compute nullables and check if grammar is sane */
   _check_nullables(bakoron);
-  {
-    int i;
-    for (i = 0; i < arrlen(bakoron->symbols); ++i) {
-      if (bakoron->symbols[i].nullable) {
-        printf("Nullable found - %d\n", bakoron->symbols[i].symbol);
-      }
-    }
-  }
 
   bk_start_symbol = &bakoron->symbols[start_symbol_index];
 

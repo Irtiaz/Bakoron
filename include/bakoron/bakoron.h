@@ -1,5 +1,7 @@
 #include <stddef.h>
 
+#define BK_EPSILON -1
+
 typedef struct Bakoron_Symbol Bakoron_Symbol;
 
 typedef struct {
