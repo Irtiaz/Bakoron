@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef enum { EXPRESSION, DIGIT, PLUS, TIMES, WHITESPACE } Symbol;
+typedef enum { EXPRESSION, NUMBER, PLUS, TIMES, WHITESPACE } Symbol;
 typedef enum {
-  EXPRESSION__DIGIT_PLUS_DIGIT,
-  EXPRESSION__DIGIT_TIMES_DIGIT
+  EXPRESSION__NUMBER_PLUS_NUMBER,
+  EXPRESSION__NUMBER_TIMES_NUMBER
 } Rule;
 
 int is_whitespace(char c) {
@@ -34,8 +34,12 @@ int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
   }
 
   else if (string[0] >= '0' && string[0] <= '9') {
-    *consumed_size = 1;
-    return DIGIT;
+    *consumed_size = 0;
+    while (string[0] >= '0' && string[0] <= '9') {
+      ++(*consumed_size);
+      ++string;
+    }
+    return NUMBER;
   }
 
   else if (is_whitespace(string[0])) {
@@ -59,14 +63,14 @@ int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
 
 int evaluate_tree(Bakoron_Tree *tree) {
   if (tree->symbol == EXPRESSION) {
-    if (tree->rule_descriptor == EXPRESSION__DIGIT_PLUS_DIGIT) {
+    if (tree->rule_descriptor == EXPRESSION__NUMBER_PLUS_NUMBER) {
       int left_operand = evaluate_tree(tree->children[0]);
       int right_operand = evaluate_tree(tree->children[2]);
 
       return left_operand + right_operand;
     }
 
-    else if (tree->rule_descriptor == EXPRESSION__DIGIT_TIMES_DIGIT) {
+    else if (tree->rule_descriptor == EXPRESSION__NUMBER_TIMES_NUMBER) {
       int left_operand = evaluate_tree(tree->children[0]);
       int right_operand = evaluate_tree(tree->children[2]);
 
@@ -80,8 +84,8 @@ int evaluate_tree(Bakoron_Tree *tree) {
     }
   }
 
-  else if (tree->symbol == DIGIT) {
-    return tree->lexeme[0] - '0';
+  else if (tree->symbol == NUMBER) {
+    return atoi(tree->lexeme);
   }
 
   fprintf(stderr,
@@ -94,24 +98,24 @@ int main(void) {
   Bakoron bakoron;
   Bakoron_Tree *tree;
 
-  const char *input = "4 * 8";
+  const char *input = "4 * 81";
 
   bakoron_init(&bakoron);
 
   bakoron_register_symbol(&bakoron, EXPRESSION, BK_VARIABLE);
+  bakoron_register_symbol(&bakoron, NUMBER, BK_TERMINAL);
   bakoron_register_symbol(&bakoron, PLUS, BK_TERMINAL);
   bakoron_register_symbol(&bakoron, TIMES, BK_TERMINAL);
-  bakoron_register_symbol(&bakoron, DIGIT, BK_TERMINAL);
 
   {
-    int rule[] = {DIGIT, PLUS, DIGIT};
-    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_PLUS_DIGIT,
+    int rule[] = {NUMBER, PLUS, NUMBER};
+    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__NUMBER_PLUS_NUMBER,
                           rule, sizeof(rule) / sizeof(rule[0]));
   }
 
   {
-    int rule[] = {DIGIT, TIMES, DIGIT};
-    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_TIMES_DIGIT,
+    int rule[] = {NUMBER, TIMES, NUMBER};
+    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__NUMBER_TIMES_NUMBER,
                           rule, sizeof(rule) / sizeof(rule[0]));
   }
 

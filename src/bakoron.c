@@ -14,28 +14,119 @@ struct Bakoron_Symbol {
   int symbol;
   Bakoron_Symbol_Type type;
   Bakoron_Rule **rules;
+  int nullable;
 };
+
+typedef struct {
+  Bakoron_Symbol *key;
+  int value;
+} Bakoron_Symbol_Set;
 
 void bakoron_init(Bakoron *bakoron) {
   bakoron->symbols = NULL;
 
   bakoron->symbol_to_index_map = NULL;
   hmdefault(bakoron->symbol_to_index_map, -1);
+
+  bakoron_register_symbol(bakoron, BK_EPSILON, BK_TERMINAL);
+}
+
+static int _symbol_is_registered(Bakoron *bakoron, int symbol) {
+  return hmget(bakoron->symbol_to_index_map, symbol) >= 0;
 }
 
 void bakoron_register_symbol(Bakoron *bakoron, int symbol,
                              Bakoron_Symbol_Type type) {
   Bakoron_Symbol bakoron_symbol;
+
+  if (_symbol_is_registered(bakoron, symbol)) {
+    fprintf(stderr, "ERROR: Symbol %d is already registered\n", symbol);
+    exit(1);
+  }
+
   bakoron_symbol.symbol = symbol;
   bakoron_symbol.type = type;
   bakoron_symbol.rules = NULL;
+  bakoron_symbol.nullable = 0;
 
   arrput(bakoron->symbols, bakoron_symbol);
   hmput(bakoron->symbol_to_index_map, symbol, arrlen(bakoron->symbols) - 1);
 }
 
-static int _symbol_is_registered(Bakoron *bakoron, int symbol) {
-  return hmget(bakoron->symbol_to_index_map, symbol) >= 0;
+static Bakoron_Symbol *_symbol_int_to_symbol_struct(Bakoron *bakoron,
+                                                    int symbol_int) {
+  int symbol_index = hmget(bakoron->symbol_to_index_map, symbol_int);
+
+  if (symbol_index < 0) {
+    fprintf(stderr, "Symbol %d is not registered\n", symbol_int);
+    exit(1);
+  }
+
+  return &bakoron->symbols[symbol_index];
+}
+
+static int _symbol_is_nullable_from_set(Bakoron_Symbol *symbol,
+                                        Bakoron_Symbol_Set *nullable_set) {
+  return symbol->symbol == BK_EPSILON || hmget(nullable_set, symbol) == 1;
+}
+
+static int _rule_is_nullable(Bakoron *bakoron, Bakoron_Rule *rule,
+                             Bakoron_Symbol_Set *nullable_set) {
+  int i;
+
+  for (i = 0; i < arrlen(rule->children); ++i) {
+    int symbol = rule->children[i];
+    Bakoron_Symbol *bk_symbol = _symbol_int_to_symbol_struct(bakoron, symbol);
+
+    if (!_symbol_is_nullable_from_set(bk_symbol, nullable_set))
+      return 0;
+  }
+
+  return 1;
+}
+
+static int _symbol_has_nullable_rule(Bakoron *bakoron, Bakoron_Symbol *symbol,
+                                     Bakoron_Symbol_Set *nullable_set) {
+  int i;
+
+  for (i = 0; i < arrlen(symbol->rules); ++i) {
+    Bakoron_Rule *rule = symbol->rules[i];
+    if (_rule_is_nullable(bakoron, rule, nullable_set))
+      return 1;
+  }
+
+  return 0;
+}
+
+static void _check_nullables(Bakoron *bakoron) {
+  Bakoron_Symbol_Set *nullable_set = NULL;
+  int i;
+  int previous_length;
+
+  hmdefault(nullable_set, 0);
+
+  do {
+    int j;
+
+    previous_length = hmlen(nullable_set);
+
+    for (j = 0; j < arrlen(bakoron->symbols); ++j) {
+      Bakoron_Symbol *symbol = &bakoron->symbols[j];
+
+      if (_symbol_has_nullable_rule(bakoron, symbol, nullable_set)) {
+        hmput(nullable_set, symbol, 1);
+      }
+    }
+
+  } while (previous_length != hmlen(nullable_set));
+
+  for (i = 0; i < arrlen(bakoron->symbols); ++i) {
+    Bakoron_Symbol *symbol = &bakoron->symbols[i];
+
+    symbol->nullable = hmget(nullable_set, symbol) != 0;
+  }
+
+  hmfree(nullable_set);
 }
 
 void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor,
@@ -145,9 +236,6 @@ static Bakoron_Tree *_parse_string_with_terminal(
                           void *user_data),
     const char *string, void *user_data, size_t *parsed_length) {
 
-  size_t skip_size;
-  int next_token;
-
   char *lexeme;
   Bakoron_Tree *tree;
 
@@ -159,16 +247,21 @@ static Bakoron_Tree *_parse_string_with_terminal(
     exit(1);
   }
 
-  next_token = _get_next_registered_token(
-      bakoron, get_next_token, parsed_length, &skip_size, user_data, string);
+  if (start_symbol->symbol != BK_EPSILON) {
+    size_t skip_size;
+    int next_token = _get_next_registered_token(
+        bakoron, get_next_token, parsed_length, &skip_size, user_data, string);
 
-  if (start_symbol->symbol != next_token)
-    return NULL;
+    if (start_symbol->symbol != next_token)
+      return NULL;
 
-  lexeme = _strndup(string + skip_size, *parsed_length);
+    lexeme = _strndup(string + skip_size, *parsed_length);
+  } else {
+    lexeme = NULL;
+  }
 
   tree = (Bakoron_Tree *)malloc(sizeof(Bakoron_Tree));
-  _tree_init(tree, next_token, lexeme, -1);
+  _tree_init(tree, start_symbol->symbol, lexeme, -1);
 
   return tree;
 }
@@ -194,9 +287,9 @@ static Bakoron_Tree *_parse_string_with_rule(
     Bakoron_Symbol *child = &bakoron->symbols[child_symbol_index];
 
     size_t child_parsed_length;
-    Bakoron_Tree *child_tree = _parse_string_recursive(
-        bakoron, child, get_next_token, string, user_data,
-        &child_parsed_length);
+    Bakoron_Tree *child_tree =
+        _parse_string_recursive(bakoron, child, get_next_token, string,
+                                user_data, &child_parsed_length);
 
     string += child_parsed_length;
     string_length -= child_parsed_length;
@@ -277,8 +370,6 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
                                                          void *user_data),
                                    const char *string, void *user_data) {
 
-  /* TODO compute nullables and check if grammar is sane */
-
   int start_symbol_index = hmget(bakoron->symbol_to_index_map, start_symbol);
   Bakoron_Symbol *bk_start_symbol;
   Bakoron_Tree *tree;
@@ -288,6 +379,17 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
   if (!_symbol_is_registered(bakoron, start_symbol)) {
     fprintf(stderr, "ERROR: Start symbol %d is not registered\n", start_symbol);
     exit(1);
+  }
+
+  /* TODO compute nullables and check if grammar is sane */
+  _check_nullables(bakoron);
+  {
+    int i;
+    for (i = 0; i < arrlen(bakoron->symbols); ++i) {
+      if (bakoron->symbols[i].nullable) {
+        printf("Nullable found - %d\n", bakoron->symbols[i].symbol);
+      }
+    }
   }
 
   bk_start_symbol = &bakoron->symbols[start_symbol_index];
