@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef enum { EXPRESSION, DIGIT, PLUS, WHITESPACE } Symbol;
-typedef enum { EXPRESSION__DIGIT_PLUS_DIGIT } Rule;
+typedef enum { EXPRESSION, DIGIT, PLUS, TIMES, WHITESPACE } Symbol;
+typedef enum {
+  EXPRESSION__DIGIT_PLUS_DIGIT,
+  EXPRESSION__DIGIT_TIMES_DIGIT
+} Rule;
 
 int is_whitespace(char c) {
   switch (c) {
@@ -23,6 +26,11 @@ int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
   if (string[0] == '+') {
     *consumed_size = 1;
     return PLUS;
+  }
+
+  else if (string[0] == '*') {
+    *consumed_size = 1;
+    return TIMES;
   }
 
   else if (string[0] >= '0' && string[0] <= '9') {
@@ -58,6 +66,13 @@ int evaluate_tree(Bakoron_Tree *tree) {
       return left_operand + right_operand;
     }
 
+    else if (tree->rule_descriptor == EXPRESSION__DIGIT_TIMES_DIGIT) {
+      int left_operand = evaluate_tree(tree->children[0]);
+      int right_operand = evaluate_tree(tree->children[2]);
+
+      return left_operand * right_operand;
+    }
+
     else {
       fprintf(stderr, "%s:%d: ERROR: Undefined rule found for EXPRRESSION\n",
               __FILE__, __LINE__);
@@ -79,17 +94,24 @@ int main(void) {
   Bakoron bakoron;
   Bakoron_Tree *tree;
 
-  const char *input = "1 + 8";
+  const char *input = "4 * 8";
 
   bakoron_init(&bakoron);
 
   bakoron_register_symbol(&bakoron, EXPRESSION, BK_VARIABLE);
   bakoron_register_symbol(&bakoron, PLUS, BK_TERMINAL);
+  bakoron_register_symbol(&bakoron, TIMES, BK_TERMINAL);
   bakoron_register_symbol(&bakoron, DIGIT, BK_TERMINAL);
 
   {
     int rule[] = {DIGIT, PLUS, DIGIT};
     bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_PLUS_DIGIT,
+                          rule, sizeof(rule) / sizeof(rule[0]));
+  }
+
+  {
+    int rule[] = {DIGIT, TIMES, DIGIT};
+    bakoron_register_rule(&bakoron, EXPRESSION, EXPRESSION__DIGIT_TIMES_DIGIT,
                           rule, sizeof(rule) / sizeof(rule[0]));
   }
 
