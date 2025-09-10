@@ -1,34 +1,30 @@
 CC=gcc
-SRC=src
-OBJ=obj
-OUT=out
-INCLUDE=include
-TARGET=$(OUT)/bakoron
-CFLAGS=-Wall -Wextra -Werror -ansi -pedantic  -g3 -I$(INCLUDE)
+CFLAGS=-Wall -Wextra -Werror -ansi -pedantic  -ggdb
 ASAN_FLAGS=-fsanitize=address,null,undefined,leak,alignment
 
-all: $(TARGET)
+all: lib/bakoron/libbakoron.a $(patsubst examples/%/, build/%, $(wildcard examples/*/))
 
-$(TARGET): $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(wildcard $(SRC)/*.c)) | $(OUT)
-	$(CC) $^ $(ASAN_FLAGS) -o $@
+lib/bakoron/libbakoron.a: build/bakoron/bakoron.o build/bakoron/stb_ds.o | lib/bakoron
+	ar rcs $@ $^
 
-$(OBJ)/main.o: $(SRC)/main.c $(INCLUDE)/bakoron.h | $(OBJ)
-	$(CC) -c $< $(CFLAGS) -o $@
+build/bakoron/bakoron.o: src/bakoron.c include/bakoron/bakoron.h | build/bakoron
+	$(CC) $(CFLAGS) -Iinclude/bakoron -Iinclude/stb_ds -c $< -o $@
 
-$(OBJ)/bakoron.o: $(SRC)/bakoron.c $(INCLUDE)/bakoron.h | $(OBJ)
-	$(CC) -c $< $(CFLAGS) -o $@
+build/bakoron/stb_ds.o: src/stb_ds.c include/stb_ds/stb_ds.h | build/bakoron
+	$(CC) $(CFLAGS) -Iinclude/stb_ds -c $< -o $@
 
-$(OBJ)/stb_ds.o: $(SRC)/stb_ds.c $(INCLUDE)/stb_ds.h | $(OBJ)
-	$(CC) -Iinclude -c $< -o $@
+build/%: examples/%/* lib/bakoron/libbakoron.a | build
+	$(CC) $(CFLAGS) $(ASAN_FLAGS) -Iinclude/bakoron -Iexamples/$* examples/$*/*.c -o $@ lib/bakoron/libbakoron.a
 
-$(OBJ):
-	mkdir -p $(OBJ)
+build:
+	mkdir -p $@
 
-$(OUT):
-	mkdir -p $(OUT)
+lib/bakoron:
+	mkdir -p $@
 
-run:
-	./$(TARGET)
+build/bakoron:
+	mkdir -p $@
 
 clean:
-	rm -rf $(OBJ)/* $(OUT)/*
+	rm -rf build
+	rm -rf lib
