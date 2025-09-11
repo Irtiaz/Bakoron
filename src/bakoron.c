@@ -97,7 +97,7 @@ static int _symbol_has_nullable_rule(Bakoron *bakoron, Bakoron_Symbol *symbol,
   return 0;
 }
 
-static void _check_nullables(Bakoron *bakoron) {
+static void _check_symbol_nullables(Bakoron *bakoron) {
   Bakoron_Symbol_Set *nullable_set = NULL;
   int i;
   int previous_length;
@@ -126,8 +126,14 @@ static void _check_nullables(Bakoron *bakoron) {
     Bakoron_Symbol *symbol = &bakoron->symbols[i];
 
     symbol->nullable = hmget(nullable_set, symbol) != 0;
-
   }
+
+
+  hmfree(nullable_set);
+}
+
+static void _check_rule_nullables(Bakoron *bakoron) {
+  int i;
 
   for (i = 0; i < arrlen(bakoron->symbols); ++i) {
     Bakoron_Symbol *symbol = &bakoron->symbols[i];
@@ -147,8 +153,11 @@ static void _check_nullables(Bakoron *bakoron) {
 
     }
   }
+}
 
-  hmfree(nullable_set);
+static void _check_nullables(Bakoron *bakoron) {
+  _check_symbol_nullables(bakoron);
+  _check_rule_nullables(bakoron);
 }
 
 void bakoron_register_rule(Bakoron *bakoron, int symbol, int rule_descriptor,
@@ -246,59 +255,6 @@ static int _get_next_registered_token(
   return -1;
 }
 
-static int _is_left_recursive(Bakoron *bakoron, Bakoron_Symbol *rule_symbol,
-                              Bakoron_Rule *rule) {
-  int i;
-  for (i = 0; i < arrlen(rule->children); ++i) {
-    int child_symbol_int = rule->children[i];
-    Bakoron_Symbol *child =
-        _symbol_int_to_symbol_struct(bakoron, child_symbol_int);
-
-    if (rule_symbol->symbol == child_symbol_int)
-      return 1;
-
-    if (!child->nullable)
-      break;
-  }
-
-  return 0;
-}
-
-typedef struct {
-  Bakoron *bakoron;
-  Bakoron_Rule *rule;
-  Bakoron_Symbol *symbol;
-} Rule_Symbol_Pair;
-
-static void _sort_rules_of_symbol_by_left_recursion(Bakoron *bakoron,
-                                                    Bakoron_Symbol *symbol) {
-  int i;
-
-  for (i = 0; i < arrlen(symbol->rules) - 1; ++i) {
-    int j;
-    for (j = 0; j < arrlen(symbol->rules) - i - 1; ++j) {
-      Bakoron_Rule *rule_j = symbol->rules[j];
-      Bakoron_Rule *rule_j_next = symbol->rules[j + 1];
-
-      int rule_j_recursive = _is_left_recursive(bakoron, symbol, rule_j);
-      int rule_j_next_recursive =
-          _is_left_recursive(bakoron, symbol, rule_j_next);
-
-      if (rule_j_recursive && !rule_j_next_recursive) {
-        symbol->rules[j] = rule_j_next;
-        symbol->rules[j + 1] = rule_j;
-      }
-    }
-  }
-}
-
-static void _sort_all_rules_by_left_recursion(Bakoron *bakoron) {
-  int i;
-  for (i = 0; i < arrlen(bakoron->symbols); ++i) {
-    _sort_rules_of_symbol_by_left_recursion(bakoron, &bakoron->symbols[i]);
-  }
-}
-
 static Bakoron_Tree *_parse_string_recursive(
     Bakoron *bakoron, Bakoron_Symbol *start_symbol,
     int (*get_next_token)(const char *string, size_t *consumed_size,
@@ -375,9 +331,6 @@ static Bakoron_Tree *_parse_string_with_rule(
     string_length -= child_parsed_length;
 
     if (child_tree == NULL || string_length < 0) {
-      /* TODO or remaining_string_length == 0 but there are other non nullable
-       * siblings after me */
-
       rule_succeded = 0;
       break;
     }
@@ -483,10 +436,6 @@ Bakoron_Tree *bakoron_parse_string(Bakoron *bakoron, int start_symbol,
 
   /* TODO check if grammar is sane (no cyclic definition etc) */
   _check_nullables(bakoron);
-
-  /* TODO remove left recursion detection stuff and sorting stuff but KEEP nullables */
-  /* _sort_all_rules_by_left_recursion(bakoron); */
-  (void)_sort_all_rules_by_left_recursion;
 
   bk_start_symbol = &bakoron->symbols[start_symbol_index];
 

@@ -11,9 +11,8 @@ typedef enum {
 
   RULED_TERMINAL,
   
-  UNRULED_TERMINAL,
+  UNRULED_TERMINAL
 
-  WHITESPACE
 } Symbol;
 
 typedef int (*Evaluator)(Bakoron_Tree *tree);
@@ -58,35 +57,12 @@ Evaluator terminal_evaluators[] = {
   tree_to_digit
 };
 
-int is_whitespace(char c) {
-  switch (c) {
-  case ' ':
-  case '\t':
-  case '\r':
-  case '\n':
-    return 1;
-  }
-
-  return 0;
-}
-
 int get_next_token(const char *string, size_t *consumed_size, void *user_data) {
   (void)user_data;
 
   if (string[0] >= '0' && string[0] <= '9') {
     *consumed_size = 1;
     return DIGIT;
-  }
-
-  else if (is_whitespace(string[0])) {
-    *consumed_size = 0;
-
-    do {
-      ++*consumed_size;
-      ++string;
-    } while (is_whitespace(string[0]));
-    
-    return WHITESPACE;
   }
 
   fprintf(stderr, "%s:%d: Cannot get next token from string %s\n", __FILE__, __LINE__, string);
@@ -119,7 +95,7 @@ int main(void) {
   Bakoron_Tree *tree;
   size_t i;
 
-  const char *input = "123";
+  const char *input = "1";
 
   bakoron_init(&bakoron);
 
