@@ -1,0 +1,32 @@
+build/
+lib/
+compile_commands.json
+.cache/
+
+# Emacs backup and auto-save files
+*~
+\#*#
+
+# Emacs compiled files
+*.elc
+
+# Emacs desktop files
+.emacs.desktop
+.emacs.desktop.lock
+
+# Tramp temporary files
+.#*
+
+# Org-mode specific files
+.org-id-locations
+*_archive
+
+# Flymake/Flycheck files
+*_flymake.*
+flycheck_*.el
+
+# Projectile files
+.projectile
+
+# Directory local variables
+.dir-locals.el
