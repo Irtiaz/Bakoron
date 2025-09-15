@@ -31,8 +31,14 @@ typedef struct {
   size_t end_marker;
 } Parse_Result;
 
+static bool symbol_is_terminal(Symbol *symbol) { return symbol->rules == NULL; }
+
+static Parse_Result **parse_recursive(BK_Parser *parser, Symbol *symbol,
+                                      size_t parse_from, int *tokens,
+                                      size_t tokens_length);
+
 static BK_Tree *tree_term_init(Symbol *term) {
-  assert(term->rules == NULL); // assert it is a terminal
+  assert(symbol_is_terminal(term));
   BK_Tree *tree = malloc(sizeof(BK_Tree));
   tree->number_of_children = 0;
   tree->symbol = term->number;
@@ -46,11 +52,6 @@ static BK_Tree *tree_rule_init(Rule *rule) {
   tree->content.children = NULL;
   tree->content.rule_descriptor = rule->rule_descriptor;
   return tree;
-}
-
-static void tree_add_child(BK_Tree *tree, BK_Tree *child) {
-  assert((size_t)arrlen(tree->content.children) < tree->number_of_children);
-  arrput(tree->content.children, child);
 }
 
 static Parse_Result *tree_with_end_marker(BK_Tree *tree, size_t end_marker) {
@@ -163,8 +164,6 @@ void bk_rule_a(BK_Parser *parser, int rule_descriptor, int rule_length,
   add_rule(parser, rule_descriptor, rule, rule_length);
 }
 
-bool symbol_is_terminal(Symbol *symbol) { return symbol->rules == NULL; }
-
 static Parse_Result **parse_terminal(Symbol *terminal, size_t parse_from,
                                      int *tokens) {
   int token = tokens[parse_from];
@@ -185,11 +184,50 @@ static Parse_Result **parse_terminal(Symbol *terminal, size_t parse_from,
     return NULL;
 }
 
-static Parse_Result **parse_subrule(Rule *rule, size_t begin, size_t parse_from,
-                                    int *tokens, size_t tokens_length) {}
+static Parse_Result *merge_result(Parse_Result *left, Parse_Result *right) {
+  for (int i = 0; i < arrlen(right->tree->content.children); ++i) {
+    arrput(left->tree->content.children, right->tree->content.children[i]);
+  }
+  arrfree(right->tree->content.children);
+  free(right->tree);
+  free(right);
+  return left;
+}
 
-static Parse_Result **parse_variable(Symbol *variable, size_t parse_from,
-                                     int *tokens, size_t tokens_length) {}
+static Parse_Result **parse_subrule(BK_Parser *parser, Rule *rule, size_t begin,
+                                    size_t parse_from, int *tokens,
+                                    size_t tokens_length) {
+  Symbol *first_symbol = rule->rule_body[begin];
+  Parse_Result **first =
+      parse_recursive(parser, first_symbol, parse_from, tokens, tokens_length);
+
+  Parse_Result **left = NULL;
+  for (int i = 0; i < arrlen(first); ++i) {
+    BK_Tree *root = tree_rule_init(rule);
+    arrput(root->content.children, first[i]->tree);
+    arrput(left, tree_with_end_marker(root, first[i]->end_marker));
+  }
+
+  if (begin == (size_t)arrlen(rule->rule_body) - 1) {
+    return left;
+  }
+
+  Parse_Result **result = NULL;
+
+  for (int i = 0; i < arrlen(left); ++i) {
+    Parse_Result **right = parse_subrule(
+        parser, rule, begin + 1, left[i]->end_marker, tokens, tokens_length);
+    for (int j = 0; j < arrlen(right); ++j) {
+      Parse_Result *merged = merge_result(left[i], right[j]);
+      arrput(result, merged);
+    }
+  }
+  return result;
+}
+
+static Parse_Result **parse_variable(BK_Parser *parser, Symbol *variable,
+                                     size_t parse_from, int *tokens,
+                                     size_t tokens_length) {}
 
 static Parse_Result **parse_recursive(BK_Parser *parser, Symbol *symbol,
                                       size_t parse_from, int *tokens,
@@ -197,7 +235,7 @@ static Parse_Result **parse_recursive(BK_Parser *parser, Symbol *symbol,
   if (symbol_is_terminal(symbol)) {
     return parse_terminal(symbol, parse_from, tokens);
   } else {
-    return parse_variable(symbol, parse_from, tokens, tokens_length);
+    return parse_variable(parser, symbol, parse_from, tokens, tokens_length);
   }
 }
 
