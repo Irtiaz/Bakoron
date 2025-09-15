@@ -22,23 +22,31 @@ struct Symbol {
   Rule **rules;
 };
 
-typedef struct Tree Tree;
-
-struct Tree {
-  Symbol *symbol;
-  union {
-    struct {
-      Tree **children;
-      int rule_descriptor;
-    };
-    size_t index;
-  } content;
-  size_t number_of_children;
-};
-
 struct BK_Parser {
   Symbol **symbols;
 };
+
+BK_Tree *tree_term_init(Symbol *term) {
+  assert(term->rules == NULL); // assert it is a terminal
+  BK_Tree *tree = malloc(sizeof(BK_Tree));
+  tree->number_of_children = 0;
+  tree->symbol = term->number;
+  tree->content.index = term->index;
+  return tree;
+}
+
+BK_Tree *tree_rule_init(Rule *rule) {
+  BK_Tree *tree = malloc(sizeof(BK_Tree));
+  tree->number_of_children = arrlen(rule->rule_body);
+  tree->content.children = NULL;
+  tree->content.rule_descriptor = rule->rule_descriptor;
+  return tree;
+}
+
+void tree_add_child(BK_Tree *tree, BK_Tree *child) {
+  assert((size_t)arrlen(tree->content.children) < tree->number_of_children);
+  arrput(tree->content.children, child);
+}
 
 BK_Parser *bk_parser(void) {
   BK_Parser *parser = (BK_Parser *)malloc(sizeof(BK_Parser));
