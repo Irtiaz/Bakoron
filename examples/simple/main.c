@@ -11,6 +11,7 @@ enum { EXPRESSION, NUMBER, PLUS };
 int evaluate_tree(BK_Tree *tree, char **lexemes) {
   if (tree->symbol == EXPRESSION) {
     assert(tree->number_of_children == 3);
+    assert(tree->content.rule_descriptor == 0);
 
     return evaluate_tree(tree->content.children[0], lexemes) +
            evaluate_tree(tree->content.children[2], lexemes);
@@ -32,7 +33,7 @@ int evaluate_tree(BK_Tree *tree, char **lexemes) {
 int main(void) {
   BK_Parser *parser = bk_parser();
 
-  bk_rule(parser, 4, EXPRESSION, NUMBER, PLUS, NUMBER);
+  bk_rule(parser, 0, 4, EXPRESSION, NUMBER, PLUS, NUMBER);
 
   int token[] = {NUMBER, PLUS, NUMBER};
   char *lexemes[] = {"12", "+", "3"};
