@@ -3,10 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define ARR_COUNT(arr) (sizeof(arr) / sizeof(arr[0]))
+
 #define LOG_ERROR(format, ...)                                                 \
   fprintf(stderr, __FILE__ ":%d:" format, __LINE__, __VA_ARGS__)
 
 enum { EXPRESSION, NUMBER, PLUS };
+enum { EXPRESSION__NUMBER_PLUS_NUMBER };
 
 int evaluate_tree(BK_Tree *tree, char **lexemes) {
   if (tree->symbol == EXPRESSION) {
@@ -26,20 +29,21 @@ int evaluate_tree(BK_Tree *tree, char **lexemes) {
     return value;
   }
 
-  LOG_ERROR("can't evaluate symbol that is neither EXPRESSION nor NUMBER - %d\n", tree->symbol);
+  LOG_ERROR(
+      "can't evaluate symbol that is neither EXPRESSION nor NUMBER - %d\n",
+      tree->symbol);
   exit(1);
 }
 
 int main(void) {
   BK_Parser *parser = bk_parser();
 
-  bk_rule(parser, 0, 4, EXPRESSION, NUMBER, PLUS, NUMBER);
+  bk_rule(parser, EXPRESSION__NUMBER_PLUS_NUMBER, 4, EXPRESSION, NUMBER, PLUS, NUMBER);
 
   int token[] = {NUMBER, PLUS, NUMBER};
   char *lexemes[] = {"12", "+", "3"};
 
-  BK_Tree *tree =
-      bk_tree(parser, EXPRESSION, token, sizeof(token) / sizeof(token[0]));
+  BK_Tree *tree = bk_tree(parser, EXPRESSION, token, ARR_COUNT(token));
 
   int result = evaluate_tree(tree, lexemes);
   printf("Result: %d\n", result);
