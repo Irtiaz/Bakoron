@@ -22,6 +22,20 @@ struct Symbol {
   Rule **rules;
 };
 
+typedef struct Tree Tree;
+
+struct Tree {
+  Symbol *symbol;
+  union {
+    struct {
+      Tree **children;
+      int rule_descriptor;
+    };
+    size_t index;
+  } content;
+  size_t number_of_children;
+};
+
 struct BK_Parser {
   Symbol **symbols;
 };
