@@ -63,6 +63,11 @@ static Parse_Result *tree_with_end_marker(BK_Tree *tree, size_t end_marker) {
   return result;
 }
 
+/* static void result_destroy(Parse_Result *result) { */
+/*   bk_tree_destroy(result->tree); */
+/*   free(result); */
+/* } */
+
 static Symbol *get_symbol_from_number(BK_Parser *parser, int number) {
   for (int i = 0; i < arrlen(parser->symbols); ++i) {
     if (parser->symbols[i]->number == number)
@@ -165,7 +170,9 @@ void bk_rule_a(BK_Parser *parser, int rule_descriptor, int rule_length,
 }
 
 static Parse_Result **parse_terminal(Symbol *terminal, size_t parse_from,
-                                     int *tokens) {
+                                     int *tokens, size_t tokens_length) {
+  assert(parse_from < tokens_length);
+
   int token = tokens[parse_from];
 
   if (terminal->number == BK_EPSILON || terminal->number == token) {
@@ -184,14 +191,18 @@ static Parse_Result **parse_terminal(Symbol *terminal, size_t parse_from,
     return NULL;
 }
 
-static Parse_Result *merge_result(Parse_Result *left, Parse_Result *right) {
-  for (int i = 0; i < arrlen(right->tree->content.children); ++i) {
-    arrput(left->tree->content.children, right->tree->content.children[i]);
+static Parse_Result *merge_result(BK_Tree *root_tree, Parse_Result *left,
+                                  Parse_Result *right) {
+  for (int i = 0; i < arrlen(left->tree->content.children); ++i) {
+    arrput(root_tree->content.children, left->tree->content.children[i]);
   }
-  arrfree(right->tree->content.children);
-  free(right->tree);
-  free(right);
-  return left;
+  for (int i = 0; i < arrlen(right->tree->content.children); ++i) {
+    arrput(root_tree->content.children, right->tree->content.children[i]);
+  }
+
+  Parse_Result *result = tree_with_end_marker(root_tree, right->end_marker);
+
+  return result;
 }
 
 static Parse_Result **parse_subrule(BK_Parser *parser, Rule *rule, size_t begin,
@@ -218,7 +229,8 @@ static Parse_Result **parse_subrule(BK_Parser *parser, Rule *rule, size_t begin,
     Parse_Result **right = parse_subrule(
         parser, rule, begin + 1, left[i]->end_marker, tokens, tokens_length);
     for (int j = 0; j < arrlen(right); ++j) {
-      Parse_Result *merged = merge_result(left[i], right[j]);
+      Parse_Result *merged =
+          merge_result(tree_rule_init(rule), left[i], right[j]);
       arrput(result, merged);
     }
   }
@@ -227,18 +239,45 @@ static Parse_Result **parse_subrule(BK_Parser *parser, Rule *rule, size_t begin,
 
 static Parse_Result **parse_variable(BK_Parser *parser, Symbol *variable,
                                      size_t parse_from, int *tokens,
-                                     size_t tokens_length) {}
+                                     size_t tokens_length) {
+  Parse_Result **results = NULL;
+  for (int i = 0; i < arrlen(variable->rules); ++i) {
+    Rule *rule = variable->rules[i];
+    Parse_Result **rule_result =
+        parse_subrule(parser, rule, 0, parse_from, tokens, tokens_length);
+
+    for (int j = 0; j < arrlen(rule_result); ++j) {
+      arrput(results, rule_result[j]);
+    }
+
+    arrfree(rule_result[i]);
+  }
+
+  return results;
+}
 
 static Parse_Result **parse_recursive(BK_Parser *parser, Symbol *symbol,
                                       size_t parse_from, int *tokens,
                                       size_t tokens_length) {
   if (symbol_is_terminal(symbol)) {
-    return parse_terminal(symbol, parse_from, tokens);
+    return parse_terminal(symbol, parse_from, tokens, tokens_length);
   } else {
     return parse_variable(parser, symbol, parse_from, tokens, tokens_length);
   }
 }
 
 BK_Tree *bk_tree(BK_Parser *parser, int start_symbol, int *tokens,
-                 size_t tokens_length);
-void bk_tree_destroy(BK_Tree *tree);
+                 size_t tokens_length) {
+  Symbol *start = get_symbol_from_number(parser, start_symbol);
+  Parse_Result **results =
+      parse_recursive(parser, start, 0, tokens, tokens_length);
+
+  assert(arrlen(results) == 1);
+
+  return results[0]->tree;
+}
+
+void bk_tree_destroy(BK_Tree *tree) {
+  (void)tree;
+  // TODO cleanup tree
+}
